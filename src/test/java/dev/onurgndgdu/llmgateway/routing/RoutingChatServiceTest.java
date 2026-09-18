@@ -85,7 +85,9 @@ class RoutingChatServiceTest {
                 budgets,
                 new CostCalculator(properties),
                 ledger,
-                new TokenEstimator());
+                new TokenEstimator(),
+                new dev.onurgndgdu.llmgateway.metrics.GatewayMetrics(
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Test

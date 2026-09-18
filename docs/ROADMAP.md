@@ -23,11 +23,11 @@ deterministic and offline.
 
 ## Phase 3 — Cost and token accounting
 
-- [ ] Token accounting, with estimation when the provider returns no usage
-- [ ] Per-model price table from configuration
-- [ ] Per-key cost aggregation in Redis
-- [ ] Budget limits, rejecting with 429 once exceeded
-- [ ] Micrometer and Prometheus metrics, Grafana dashboard committed to the repo
+- [x] Token accounting, with estimation when the provider returns no usage
+- [x] Per-model price table from configuration
+- [x] Per-key cost aggregation in Redis
+- [x] Budget limits, rejecting with 429 once exceeded
+- [x] Micrometer and Prometheus metrics, Grafana dashboard committed to the repo
 
 ## Phase 4 — Caching
 

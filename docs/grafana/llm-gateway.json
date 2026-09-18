@@ -1,0 +1,78 @@
+{
+  "title": "LLM Gateway",
+  "uid": "llm-gateway",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Spend per hour by model",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (provider, model) (rate(llm_gateway_cost_total[5m])) * 3600",
+          "legendFormat": "{{provider}}/{{model}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate by outcome",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(llm_gateway_request_seconds_count[5m]))",
+          "legendFormat": "{{outcome}}"
+        },
+        {
+          "expr": "sum by (kind) (rate(llm_gateway_failures_total[5m]))",
+          "legendFormat": "failure: {{kind}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency, p50 and p99",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, provider) (rate(llm_gateway_request_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{provider}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, provider) (rate(llm_gateway_request_seconds_bucket[5m])))",
+          "legendFormat": "p99 {{provider}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Failover rate",
+      "description": "A rising line here means the primary provider is unhealthy. It is the signal that matters before anyone notices elevated latency.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (from, to) (rate(llm_gateway_failover_total[5m]))",
+          "legendFormat": "{{from}} to {{to}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Trustworthiness of cost figures",
+      "description": "Estimated usage means a provider stopped reporting token counts. Unpriced calls mean a model is missing from the price table. Either one silently corrupts the spend numbers above.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (provider, model) (rate(llm_gateway_usage_estimated_total[5m]))",
+          "legendFormat": "estimated {{provider}}/{{model}}"
+        },
+        {
+          "expr": "sum by (provider, model) (rate(llm_gateway_cost_unpriced_total[5m]))",
+          "legendFormat": "unpriced {{provider}}/{{model}}"
+        }
+      ]
+    }
+  ]
+}

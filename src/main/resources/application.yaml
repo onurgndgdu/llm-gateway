@@ -24,6 +24,22 @@ gateway:
       sliding-window-size: 20
       open-state-duration: 30s
 
+  # Keyed by providerId:upstreamModel, in currency units per million tokens,
+  # so the table can be compared directly against a vendor's pricing page.
+  prices:
+    "[mock:mock-fast]":
+      input-per-million: 0.50
+      output-per-million: 1.50
+    "[mock:mock-long]":
+      input-per-million: 3.00
+      output-per-million: 15.00
+
+  budgets:
+    # No default cap: a gateway that starts rejecting traffic on deployment,
+    # because nobody has set a limit yet, is worse than one that does not cap.
+    default-daily:
+    per-caller: {}
+
 management:
   endpoints:
     web:

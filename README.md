@@ -62,6 +62,15 @@ their failures; the routing layer decides what to do about them.
 switching provider would splice two different completions into one response and
 the caller would have no way to tell. Failing is the honest outcome.
 
+**The gateway measures latency itself.** A provider's own reported figure
+excludes the network, any retry and any failover. What matters operationally is
+what the caller waited for.
+
+**Unpriced and estimated calls are counted, not hidden.** A model missing from
+the price table, or a provider that stopped reporting token counts, would
+otherwise quietly turn the spend figures into fiction while every chart still
+looked healthy.
+
 **Redis for state.** Counters, quotas and cache entries are short-lived and
 shared across instances. A relational store would add durability that none of
 this state needs.

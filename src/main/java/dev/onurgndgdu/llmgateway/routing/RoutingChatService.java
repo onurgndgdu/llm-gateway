@@ -4,11 +4,13 @@ import dev.onurgndgdu.llmgateway.cost.BudgetGuard;
 import dev.onurgndgdu.llmgateway.cost.CostCalculator;
 import dev.onurgndgdu.llmgateway.cost.CostLedger;
 import dev.onurgndgdu.llmgateway.cost.TokenEstimator;
+import dev.onurgndgdu.llmgateway.metrics.GatewayMetrics;
 import dev.onurgndgdu.llmgateway.provider.ChatChunk;
 import dev.onurgndgdu.llmgateway.provider.ChatRequest;
 import dev.onurgndgdu.llmgateway.provider.ChatResponse;
 import dev.onurgndgdu.llmgateway.provider.ProviderException;
 import dev.onurgndgdu.llmgateway.resilience.ProviderResilience;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
@@ -36,6 +38,7 @@ public class RoutingChatService {
     private final CostCalculator costs;
     private final CostLedger ledger;
     private final TokenEstimator tokens;
+    private final GatewayMetrics metrics;
 
     public RoutingChatService(
             ModelRouter router,
@@ -43,21 +46,32 @@ public class RoutingChatService {
             BudgetGuard budgets,
             CostCalculator costs,
             CostLedger ledger,
-            TokenEstimator tokens) {
+            TokenEstimator tokens,
+            GatewayMetrics metrics) {
         this.router = router;
         this.resilience = resilience;
         this.budgets = budgets;
         this.costs = costs;
         this.ledger = ledger;
         this.tokens = tokens;
+        this.metrics = metrics;
     }
 
     public Mono<ChatResponse> complete(ChatRequest request, String callerId) {
         List<ModelRouter.Resolved> chain = router.resolve(request.model());
         return budgets
                 .check(callerId)
-                .then(Mono.defer(() -> attempt(request, chain, 0)))
-                .flatMap(response -> recordSpend(request, response, callerId).thenReturn(response));
+                // Measured here rather than taken from the response: a provider's
+                // own figure excludes the network, retries and any failover, and
+                // what matters operationally is what the caller waited for.
+                .then(Mono.defer(() -> attempt(request, chain, 0).elapsed()))
+                .flatMap(
+                        timed -> {
+                            ChatResponse response = timed.getT2();
+                            Duration observed = Duration.ofMillis(timed.getT1());
+                            return recordSpend(request, response, callerId, observed)
+                                    .thenReturn(response);
+                        });
     }
 
     /**
@@ -66,9 +80,14 @@ public class RoutingChatService {
      * then; losing the bookkeeping is bad, but returning an error for an answer
      * the caller has paid for is worse.
      */
-    private Mono<Void> recordSpend(ChatRequest request, ChatResponse response, String callerId) {
+    private Mono<Void> recordSpend(
+            ChatRequest request, ChatResponse response, String callerId, Duration observedLatency) {
         var usage = tokens.resolve(request, response.content(), response.usage());
         var cost = costs.costOf(response.providerId(), response.upstreamModel(), usage);
+
+        metrics.recordSuccess(
+                response.providerId(), response.upstreamModel(), observedLatency, usage);
+        metrics.recordCost(response.providerId(), response.upstreamModel(), cost);
 
         if (!cost.priced()) {
             return Mono.empty();
@@ -100,9 +119,15 @@ public class RoutingChatService {
 
         return call.onErrorResume(
                 error -> {
+                    if (error instanceof ProviderException failure) {
+                        metrics.recordFailure(
+                                target.provider().id(), target.upstreamModel(), failure.kind());
+                    }
                     if (!shouldFailOver(error)) {
                         return Mono.error(error);
                     }
+                    metrics.recordFailover(
+                            target.provider().id(), chain.get(index + 1).provider().id());
                     log.warn(
                             "provider '{}' failed for alias '{}', falling over to '{}': {}",
                             target.provider().id(),
