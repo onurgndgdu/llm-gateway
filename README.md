@@ -49,6 +49,19 @@ behaviour is what this project is actually about, and it cannot be tested
 reliably against a live provider. It also means the full test suite runs
 offline, with no API keys.
 
+**Failover is an ordered chain, not a scoring function.** A route lists its
+targets in order and the gateway walks them. Health-aware selection is more
+sophisticated, but during an incident the question is always "where did this
+request actually go", and an ordered list answers it immediately.
+
+**Only retryable conditions fail over.** A malformed request sent to three
+vendors in turn is the caller's mistake multiplied by three. Providers classify
+their failures; the routing layer decides what to do about them.
+
+**Streams fail over only before the first chunk.** Once bytes are on the wire,
+switching provider would splice two different completions into one response and
+the caller would have no way to tell. Failing is the honest outcome.
+
 **Redis for state.** Counters, quotas and cache entries are short-lived and
 shared across instances. A relational store would add durability that none of
 this state needs.
