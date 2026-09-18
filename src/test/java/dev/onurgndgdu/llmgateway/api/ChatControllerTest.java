@@ -29,18 +29,18 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @TestPropertySource(
         properties = {
             "gateway.mock.enabled=false",
-            "gateway.routes.healthy.provider-id=stub",
-            "gateway.routes.healthy.upstream-model=good",
-            "gateway.routes.throttled.provider-id=stub",
-            "gateway.routes.throttled.upstream-model=throttled",
-            "gateway.routes.down.provider-id=stub",
-            "gateway.routes.down.upstream-model=down",
-            "gateway.routes.rejected.provider-id=stub",
-            "gateway.routes.rejected.upstream-model=rejected",
-            "gateway.routes.misconfigured.provider-id=stub",
-            "gateway.routes.misconfigured.upstream-model=bad-credentials",
-            "gateway.routes.cut-short.provider-id=stub",
-            "gateway.routes.cut-short.upstream-model=cut-short"
+            "gateway.routes.healthy.targets[0].provider-id=stub",
+            "gateway.routes.healthy.targets[0].upstream-model=good",
+            "gateway.routes.throttled.targets[0].provider-id=stub",
+            "gateway.routes.throttled.targets[0].upstream-model=throttled",
+            "gateway.routes.down.targets[0].provider-id=stub",
+            "gateway.routes.down.targets[0].upstream-model=down",
+            "gateway.routes.rejected.targets[0].provider-id=stub",
+            "gateway.routes.rejected.targets[0].upstream-model=rejected",
+            "gateway.routes.misconfigured.targets[0].provider-id=stub",
+            "gateway.routes.misconfigured.targets[0].upstream-model=bad-credentials",
+            "gateway.routes.cut-short.targets[0].provider-id=stub",
+            "gateway.routes.cut-short.targets[0].upstream-model=cut-short"
         })
 class ChatControllerTest {
 

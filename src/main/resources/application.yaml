@@ -3,14 +3,26 @@ spring:
     name: llm-gateway
 
 gateway:
-  # Callers ask for an alias; the vendor model is an operational detail.
+  # Callers ask for an alias; which vendor serves it is an operational detail.
+  # Order within a route is the failover policy.
   routes:
     fast:
-      provider-id: mock
-      upstream-model: mock-fast
+      targets:
+        - provider-id: mock
+          upstream-model: mock-fast
     long-context:
-      provider-id: mock
-      upstream-model: mock-long
+      targets:
+        - provider-id: mock
+          upstream-model: mock-long
+
+  resilience:
+    default-policy:
+      timeout: 30s
+      max-attempts: 3
+      initial-backoff: 200ms
+      failure-rate-threshold: 50
+      sliding-window-size: 20
+      open-state-duration: 30s
 
 management:
   endpoints:

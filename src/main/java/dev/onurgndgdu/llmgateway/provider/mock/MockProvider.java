@@ -71,25 +71,37 @@ public class MockProvider implements LlmProvider {
 
     @Override
     public Mono<ChatResponse> complete(ChatRequest request, String upstreamModel) {
-        MockScenario scenario = scenarioFor(upstreamModel);
+        // Deferred so that the work — including counting the call — happens on
+        // subscription, the way a real HTTP client behaves. Doing it eagerly
+        // would make a retry look like a single call, and a call blocked by an
+        // open circuit look like one that reached the provider.
+        return Mono.defer(
+                () -> {
+                    MockScenario scenario = scenarioFor(upstreamModel);
 
-        if (scenario.fails()) {
-            return Mono.error(failure(scenario));
-        }
+                    if (scenario.fails()) {
+                        return Mono.error(failure(scenario));
+                    }
 
-        ChatResponse response = new ChatResponse(
-                scenario.reply(),
-                id,
-                upstreamModel,
-                FIXED_USAGE,
-                ChatResponse.FinishReason.STOP,
-                scenario.latency());
+                    ChatResponse response =
+                            new ChatResponse(
+                                    scenario.reply(),
+                                    id,
+                                    upstreamModel,
+                                    FIXED_USAGE,
+                                    ChatResponse.FinishReason.STOP,
+                                    scenario.latency());
 
-        return Mono.just(response).delayElement(scenario.latency());
+                    return Mono.just(response).delayElement(scenario.latency());
+                });
     }
 
     @Override
     public Flux<ChatChunk> stream(ChatRequest request, String upstreamModel) {
+        return Flux.defer(() -> streamInternal(upstreamModel));
+    }
+
+    private Flux<ChatChunk> streamInternal(String upstreamModel) {
         MockScenario scenario = scenarioFor(upstreamModel);
 
         if (scenario.fails()) {
