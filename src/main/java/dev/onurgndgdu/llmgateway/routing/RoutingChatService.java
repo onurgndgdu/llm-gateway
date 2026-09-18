@@ -1,5 +1,6 @@
 package dev.onurgndgdu.llmgateway.routing;
 
+import dev.onurgndgdu.llmgateway.cache.ResponseCache;
 import dev.onurgndgdu.llmgateway.cost.BudgetGuard;
 import dev.onurgndgdu.llmgateway.cost.CostCalculator;
 import dev.onurgndgdu.llmgateway.cost.CostLedger;
@@ -39,6 +40,7 @@ public class RoutingChatService {
     private final CostLedger ledger;
     private final TokenEstimator tokens;
     private final GatewayMetrics metrics;
+    private final ResponseCache cache;
 
     public RoutingChatService(
             ModelRouter router,
@@ -47,7 +49,8 @@ public class RoutingChatService {
             CostCalculator costs,
             CostLedger ledger,
             TokenEstimator tokens,
-            GatewayMetrics metrics) {
+            GatewayMetrics metrics,
+            ResponseCache cache) {
         this.router = router;
         this.resilience = resilience;
         this.budgets = budgets;
@@ -55,10 +58,41 @@ public class RoutingChatService {
         this.ledger = ledger;
         this.tokens = tokens;
         this.metrics = metrics;
+        this.cache = cache;
     }
 
     public Mono<ChatResponse> complete(ChatRequest request, String callerId) {
+        return complete(request, callerId, false);
+    }
+
+    public Mono<ChatResponse> complete(ChatRequest request, String callerId, boolean bypassCache) {
+        // Resolved up front so an unknown alias fails the same way on a cache
+        // hit as on a miss. A request that would be rejected as misconfigured
+        // must not start succeeding just because an answer happens to be stored.
         List<ModelRouter.Resolved> chain = router.resolve(request.model());
+
+        Mono<ChatResponse> fresh = callProviders(request, callerId, chain);
+
+        if (bypassCache || !cache.isCacheable(request)) {
+            metrics.recordCacheOutcome(request.model(), bypassCache ? "bypass" : "uncacheable");
+            return fresh;
+        }
+
+        return cache
+                .lookup(callerId, request)
+                .doOnNext(hit -> metrics.recordCacheOutcome(request.model(), "hit"))
+                .switchIfEmpty(
+                        Mono.defer(
+                                () -> {
+                                    metrics.recordCacheOutcome(request.model(), "miss");
+                                    return fresh.flatMap(
+                                            response ->
+                                                    cache.store(callerId, request, response).thenReturn(response));
+                                }));
+    }
+
+    private Mono<ChatResponse> callProviders(
+            ChatRequest request, String callerId, List<ModelRouter.Resolved> chain) {
         return budgets
                 .check(callerId)
                 // Measured here rather than taken from the response: a provider's

@@ -50,6 +50,7 @@ class RoutingChatServiceTest {
                 Map.of("alias", route),
                 new GatewayProperties.Resilience(policy, Map.of()),
                 Map.of(),
+                null,
                 null);
     }
 
@@ -87,7 +88,8 @@ class RoutingChatServiceTest {
                 ledger,
                 new TokenEstimator(),
                 new dev.onurgndgdu.llmgateway.metrics.GatewayMetrics(
-                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
+                disabledCache());
     }
 
     @Test
@@ -207,6 +209,14 @@ class RoutingChatServiceTest {
         // Switching mid-answer would splice two different completions into one
         // response, and the caller could not tell.
         assertThat(secondary.totalCalls()).isZero();
+    }
+
+    /** Caching has its own tests; here it is switched off so these stay about routing. */
+    private static dev.onurgndgdu.llmgateway.cache.ResponseCache disabledCache() {
+        var cache = org.mockito.Mockito.mock(dev.onurgndgdu.llmgateway.cache.ResponseCache.class);
+        org.mockito.Mockito.when(cache.isCacheable(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(false);
+        return cache;
     }
 
     private static Throwable catchError(Mono<?> mono) {

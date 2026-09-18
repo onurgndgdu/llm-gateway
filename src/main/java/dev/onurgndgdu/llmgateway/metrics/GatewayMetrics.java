@@ -59,6 +59,20 @@ public class GatewayMetrics {
                 .increment();
     }
 
+    /**
+     * Outcomes are counted with a tag rather than as separate meters, so that a
+     * hit rate is one query. Counting only hits makes the rate impossible to
+     * compute without knowing the total, which is the mistake that leaves a
+     * cache looking effective while it quietly stops being used.
+     */
+    public void recordCacheOutcome(String alias, String outcome) {
+        Counter.builder("llm.gateway.cache")
+                .tag("alias", alias)
+                .tag("outcome", outcome)
+                .register(registry)
+                .increment();
+    }
+
     public void recordCost(String providerId, String model, CostCalculator.Cost cost) {
         if (!cost.priced()) {
             // Unpriced calls are counted separately rather than added as zero.

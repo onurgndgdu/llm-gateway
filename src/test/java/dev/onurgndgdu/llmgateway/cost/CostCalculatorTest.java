@@ -16,7 +16,7 @@ class CostCalculatorTest {
             new ModelPrice(new BigDecimal("3.00"), new BigDecimal("15.00"));
 
     private CostCalculator calculatorWith(Map<String, ModelPrice> prices) {
-        return new CostCalculator(new GatewayProperties(Map.of(), null, prices, null));
+        return new CostCalculator(new GatewayProperties(Map.of(), null, prices, null, null));
     }
 
     @Test

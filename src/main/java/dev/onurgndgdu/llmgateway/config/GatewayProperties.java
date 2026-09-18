@@ -18,13 +18,31 @@ public record GatewayProperties(
         Map<String, Route> routes,
         Resilience resilience,
         Map<String, ModelPrice> prices,
-        Budgets budgets) {
+        Budgets budgets,
+        Cache cache) {
 
     public GatewayProperties {
         routes = routes == null ? Map.of() : Map.copyOf(routes);
         resilience = resilience == null ? Resilience.defaults() : resilience;
         prices = prices == null ? Map.of() : Map.copyOf(prices);
         budgets = budgets == null ? new Budgets(null, Map.of()) : budgets;
+        cache = cache == null ? Cache.defaults() : cache;
+    }
+
+    /**
+     * @param ttl how long an answer stays servable. Short by default: a cached
+     *            answer is a snapshot of what a model said once, and the longer
+     *            it is kept the further it drifts from what the model would say
+     *            now.
+     */
+    public record Cache(boolean enabled, Duration ttl) {
+        public Cache {
+            ttl = ttl == null ? Duration.ofHours(1) : ttl;
+        }
+
+        static Cache defaults() {
+            return new Cache(true, Duration.ofHours(1));
+        }
     }
 
     /** The caller's daily limit, or null when the caller is uncapped. */

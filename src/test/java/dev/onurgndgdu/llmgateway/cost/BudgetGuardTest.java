@@ -17,7 +17,7 @@ class BudgetGuardTest {
     private BudgetGuard guardWith(GatewayProperties.Budgets budgets, String spent) {
         CostLedger ledger = mock(CostLedger.class);
         when(ledger.spentToday(anyString())).thenReturn(Mono.just(new BigDecimal(spent)));
-        return new BudgetGuard(ledger, new GatewayProperties(Map.of(), null, Map.of(), budgets));
+        return new BudgetGuard(ledger, new GatewayProperties(Map.of(), null, Map.of(), budgets, null));
     }
 
     @Test
@@ -68,7 +68,11 @@ class BudgetGuardTest {
                 new BudgetGuard(
                         ledger,
                         new GatewayProperties(
-                                Map.of(), null, Map.of(), new GatewayProperties.Budgets(null, Map.of())));
+                                Map.of(),
+                                null,
+                                Map.of(),
+                                new GatewayProperties.Budgets(null, Map.of()),
+                                null));
 
         StepVerifier.create(guard.check("caller")).verifyComplete();
 
