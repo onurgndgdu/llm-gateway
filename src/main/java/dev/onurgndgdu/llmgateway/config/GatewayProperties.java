@@ -35,13 +35,38 @@ public record GatewayProperties(
      *            it is kept the further it drifts from what the model would say
      *            now.
      */
-    public record Cache(boolean enabled, Duration ttl) {
+    /**
+     * Boxed flags rather than primitives. A primitive boolean cannot tell an
+     * unset property from an explicit false, so configuring any single field
+     * of this block — a TTL, say — would silently switch the cache off.
+     */
+    public record Cache(
+            Boolean enabled,
+            Duration ttl,
+            Boolean semanticEnabled,
+            double similarityThreshold,
+            int maxSemanticEntries) {
+
         public Cache {
+            enabled = enabled == null || enabled;
+            semanticEnabled = semanticEnabled != null && semanticEnabled;
             ttl = ttl == null ? Duration.ofHours(1) : ttl;
+            // A threshold of zero would match anything, so an unset value falls
+            // back to the conservative default rather than to nothing.
+            similarityThreshold = similarityThreshold <= 0 ? 0.95d : similarityThreshold;
+            maxSemanticEntries = maxSemanticEntries <= 0 ? 1000 : maxSemanticEntries;
         }
 
         static Cache defaults() {
-            return new Cache(true, Duration.ofHours(1));
+            return new Cache(true, Duration.ofHours(1), false, 0.95d, 1000);
+        }
+
+        public boolean isEnabled() {
+            return Boolean.TRUE.equals(enabled);
+        }
+
+        public boolean isSemanticEnabled() {
+            return Boolean.TRUE.equals(semanticEnabled);
         }
     }
 

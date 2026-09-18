@@ -1,6 +1,7 @@
 package dev.onurgndgdu.llmgateway.routing;
 
 import dev.onurgndgdu.llmgateway.cache.ResponseCache;
+import dev.onurgndgdu.llmgateway.cache.SemanticCache;
 import dev.onurgndgdu.llmgateway.cost.BudgetGuard;
 import dev.onurgndgdu.llmgateway.cost.CostCalculator;
 import dev.onurgndgdu.llmgateway.cost.CostLedger;
@@ -41,6 +42,7 @@ public class RoutingChatService {
     private final TokenEstimator tokens;
     private final GatewayMetrics metrics;
     private final ResponseCache cache;
+    private final SemanticCache semanticCache;
 
     public RoutingChatService(
             ModelRouter router,
@@ -50,7 +52,8 @@ public class RoutingChatService {
             CostLedger ledger,
             TokenEstimator tokens,
             GatewayMetrics metrics,
-            ResponseCache cache) {
+            ResponseCache cache,
+            SemanticCache semanticCache) {
         this.router = router;
         this.resilience = resilience;
         this.budgets = budgets;
@@ -59,6 +62,7 @@ public class RoutingChatService {
         this.tokens = tokens;
         this.metrics = metrics;
         this.cache = cache;
+        this.semanticCache = semanticCache;
     }
 
     public Mono<ChatResponse> complete(ChatRequest request, String callerId) {
@@ -80,15 +84,41 @@ public class RoutingChatService {
 
         return cache
                 .lookup(callerId, request)
-                .doOnNext(hit -> metrics.recordCacheOutcome(request.model(), "hit"))
+                .doOnNext(hit -> metrics.recordCacheOutcome(request.model(), "exact-hit"))
+                // Exact match first: it is one Redis read and it cannot be
+                // wrong, whereas a semantic hit is always a judgement call.
+                .switchIfEmpty(Mono.defer(() -> semanticLookup(request, callerId)))
                 .switchIfEmpty(
                         Mono.defer(
                                 () -> {
                                     metrics.recordCacheOutcome(request.model(), "miss");
-                                    return fresh.flatMap(
-                                            response ->
-                                                    cache.store(callerId, request, response).thenReturn(response));
+                                    return fresh.flatMap(response -> storeBoth(request, callerId, response));
                                 }));
+    }
+
+    private Mono<ChatResponse> semanticLookup(ChatRequest request, String callerId) {
+        return semanticCache
+                .lookup(callerId, request)
+                .doOnNext(
+                        match -> {
+                            metrics.recordCacheOutcome(request.model(), "semantic-hit");
+                            // Logged with its score: a semantic hit is the one
+                            // cache outcome that can be wrong, and the score is
+                            // what makes a wrong one diagnosable afterwards.
+                            log.debug(
+                                    "semantic cache hit for alias '{}' at similarity {}",
+                                    request.model(),
+                                    match.score());
+                        })
+                .map(SemanticCache.Match::response);
+    }
+
+    private Mono<ChatResponse> storeBoth(
+            ChatRequest request, String callerId, ChatResponse response) {
+        return cache
+                .store(callerId, request, response)
+                .then(semanticCache.store(callerId, request, response))
+                .thenReturn(response);
     }
 
     private Mono<ChatResponse> callProviders(

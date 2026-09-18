@@ -71,6 +71,15 @@ the price table, or a provider that stopped reporting token counts, would
 otherwise quietly turn the spend figures into fiction while every chart still
 looked healthy.
 
+**Only deterministic requests are cached.** A non-zero temperature is the
+caller asking for variety; serving one stored answer forever removes it
+without them being able to tell.
+
+**Semantic caching is off by default.** It can return an answer to a question
+nobody asked. The similarity threshold is the whole risk, so it defaults
+conservatively, is namespaced per caller, and every hit records the score it
+matched on.
+
 **Redis for state.** Counters, quotas and cache entries are short-lived and
 shared across instances. A relational store would add durability that none of
 this state needs.

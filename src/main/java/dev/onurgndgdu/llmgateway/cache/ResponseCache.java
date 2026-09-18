@@ -41,7 +41,7 @@ public class ResponseCache {
     }
 
     public boolean isCacheable(ChatRequest request) {
-        if (!properties.cache().enabled()) {
+        if (!properties.cache().isEnabled()) {
             return false;
         }
         // Null means the provider default, which is not necessarily zero, so it

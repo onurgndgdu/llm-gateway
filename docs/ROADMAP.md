@@ -31,10 +31,10 @@ deterministic and offline.
 
 ## Phase 4 — Caching
 
-- [ ] Exact-match cache keyed by request hash, with TTL
-- [ ] Semantic cache via embeddings and vector similarity (deterministic local embedder in tests)
-- [ ] Cache bypass header and invalidation
-- [ ] Hit and miss metrics
+- [x] Exact-match cache keyed by request hash, with TTL
+- [x] Semantic cache via embeddings and vector similarity (deterministic local embedder in tests)
+- [x] Cache bypass header and invalidation
+- [x] Hit and miss metrics
 
 ## Phase 5 — Access control
 

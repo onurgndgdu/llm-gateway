@@ -89,7 +89,8 @@ class RoutingChatServiceTest {
                 new TokenEstimator(),
                 new dev.onurgndgdu.llmgateway.metrics.GatewayMetrics(
                         new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
-                disabledCache());
+                disabledCache(),
+                disabledSemanticCache());
     }
 
     @Test
@@ -216,6 +217,15 @@ class RoutingChatServiceTest {
         var cache = org.mockito.Mockito.mock(dev.onurgndgdu.llmgateway.cache.ResponseCache.class);
         org.mockito.Mockito.when(cache.isCacheable(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(false);
+        return cache;
+    }
+
+    private static dev.onurgndgdu.llmgateway.cache.SemanticCache disabledSemanticCache() {
+        var cache = org.mockito.Mockito.mock(dev.onurgndgdu.llmgateway.cache.SemanticCache.class);
+        org.mockito.Mockito.when(
+                        cache.lookup(org.mockito.ArgumentMatchers.anyString(),
+                                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.empty());
         return cache;
     }
 
