@@ -43,7 +43,9 @@ class RoutingChatServiceTest {
                                 new Route.Target("primary", "model"),
                                 new Route.Target("secondary", "model")));
         return new GatewayProperties(
-                Map.of("alias", route), new GatewayProperties.Resilience(policy, Map.of()));
+                Map.of("alias", route),
+                new GatewayProperties.Resilience(policy, Map.of()),
+                Map.of());
     }
 
     /** One attempt per provider, so retry does not blur the failover assertions. */

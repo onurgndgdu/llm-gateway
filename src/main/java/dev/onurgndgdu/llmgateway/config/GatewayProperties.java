@@ -1,5 +1,6 @@
 package dev.onurgndgdu.llmgateway.config;
 
+import dev.onurgndgdu.llmgateway.cost.ModelPrice;
 import dev.onurgndgdu.llmgateway.routing.Route;
 import java.time.Duration;
 import java.util.Map;
@@ -12,11 +13,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                   as long before a timeout fires
  */
 @ConfigurationProperties(prefix = "gateway")
-public record GatewayProperties(Map<String, Route> routes, Resilience resilience) {
+public record GatewayProperties(
+        Map<String, Route> routes, Resilience resilience, Map<String, ModelPrice> prices) {
 
     public GatewayProperties {
         routes = routes == null ? Map.of() : Map.copyOf(routes);
         resilience = resilience == null ? Resilience.defaults() : resilience;
+        prices = prices == null ? Map.of() : Map.copyOf(prices);
+    }
+
+    /** Prices are keyed by {@code providerId:upstreamModel}. */
+    public ModelPrice priceFor(String providerId, String upstreamModel) {
+        return prices.get(providerId + ":" + upstreamModel);
     }
 
     public Policy policyFor(String providerId) {
