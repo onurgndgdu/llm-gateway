@@ -6,20 +6,20 @@ deterministic and offline.
 
 ## Phase 1 — Core proxy path
 
-- [ ] Domain model: `ChatRequest`, `ChatResponse`, `Usage` as records, independent of any provider
-- [ ] `LlmProvider` SPI — one interface, many implementations
-- [ ] `MockProvider` with scripted scenarios: fixed replies, injected latency, injected failures, truncated streams
-- [ ] `POST /v1/chat/completions`, non-streaming
-- [ ] Normalized error model across providers
-- [ ] SSE streaming passthrough with backpressure
-- [ ] End-to-end tests with `WebTestClient`
+- [x] Domain model: `ChatRequest`, `ChatResponse`, `Usage` as records, independent of any provider
+- [x] `LlmProvider` SPI — one interface, many implementations
+- [x] `MockProvider` with scripted scenarios: fixed replies, injected latency, injected failures, truncated streams
+- [x] `POST /v1/chat/completions`, non-streaming
+- [x] Normalized error model across providers
+- [x] SSE streaming passthrough with backpressure
+- [x] End-to-end tests with `WebTestClient`
 
 ## Phase 2 — Routing and resilience
 
-- [ ] Routing rules: model alias to provider and upstream model name
-- [ ] Fallback chain when the primary provider fails
-- [ ] Resilience4j: circuit breaker, retry with jitter, per-provider timeouts
-- [ ] Failure-scenario tests driven by the mock provider
+- [x] Routing rules: model alias to provider and upstream model name
+- [x] Fallback chain when the primary provider fails
+- [x] Resilience4j: circuit breaker, retry with jitter, per-provider timeouts
+- [x] Failure-scenario tests driven by the mock provider
 
 ## Phase 3 — Cost and token accounting
 
