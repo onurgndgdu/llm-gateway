@@ -1,5 +1,9 @@
 package dev.onurgndgdu.llmgateway.routing;
 
+import dev.onurgndgdu.llmgateway.cost.BudgetGuard;
+import dev.onurgndgdu.llmgateway.cost.CostCalculator;
+import dev.onurgndgdu.llmgateway.cost.CostLedger;
+import dev.onurgndgdu.llmgateway.cost.TokenEstimator;
 import dev.onurgndgdu.llmgateway.provider.ChatChunk;
 import dev.onurgndgdu.llmgateway.provider.ChatRequest;
 import dev.onurgndgdu.llmgateway.provider.ChatResponse;
@@ -28,15 +32,55 @@ public class RoutingChatService {
 
     private final ModelRouter router;
     private final ProviderResilience resilience;
+    private final BudgetGuard budgets;
+    private final CostCalculator costs;
+    private final CostLedger ledger;
+    private final TokenEstimator tokens;
 
-    public RoutingChatService(ModelRouter router, ProviderResilience resilience) {
+    public RoutingChatService(
+            ModelRouter router,
+            ProviderResilience resilience,
+            BudgetGuard budgets,
+            CostCalculator costs,
+            CostLedger ledger,
+            TokenEstimator tokens) {
         this.router = router;
         this.resilience = resilience;
+        this.budgets = budgets;
+        this.costs = costs;
+        this.ledger = ledger;
+        this.tokens = tokens;
     }
 
-    public Mono<ChatResponse> complete(ChatRequest request) {
+    public Mono<ChatResponse> complete(ChatRequest request, String callerId) {
         List<ModelRouter.Resolved> chain = router.resolve(request.model());
-        return attempt(request, chain, 0);
+        return budgets
+                .check(callerId)
+                .then(Mono.defer(() -> attempt(request, chain, 0)))
+                .flatMap(response -> recordSpend(request, response, callerId).thenReturn(response));
+    }
+
+    /**
+     * Spend is recorded after the answer, never before it, and a failure to
+     * record it does not fail the call. The tokens have already been bought by
+     * then; losing the bookkeeping is bad, but returning an error for an answer
+     * the caller has paid for is worse.
+     */
+    private Mono<Void> recordSpend(ChatRequest request, ChatResponse response, String callerId) {
+        var usage = tokens.resolve(request, response.content(), response.usage());
+        var cost = costs.costOf(response.providerId(), response.upstreamModel(), usage);
+
+        if (!cost.priced()) {
+            return Mono.empty();
+        }
+
+        return ledger
+                .record(callerId, cost.amount())
+                .onErrorResume(
+                        error -> {
+                            log.error("failed to record spend for caller '{}'", callerId, error);
+                            return Mono.empty();
+                        });
     }
 
     private Mono<ChatResponse> attempt(
@@ -76,9 +120,9 @@ public class RoutingChatService {
      * two different completions into one response. The caller would have no way
      * to tell. Failing is the honest outcome.
      */
-    public Flux<ChatChunk> stream(ChatRequest request) {
+    public Flux<ChatChunk> stream(ChatRequest request, String callerId) {
         List<ModelRouter.Resolved> chain = router.resolve(request.model());
-        return streamAttempt(request, chain, 0);
+        return budgets.check(callerId).thenMany(Flux.defer(() -> streamAttempt(request, chain, 0)));
     }
 
     private Flux<ChatChunk> streamAttempt(

@@ -2,6 +2,7 @@ package dev.onurgndgdu.llmgateway.config;
 
 import dev.onurgndgdu.llmgateway.cost.ModelPrice;
 import dev.onurgndgdu.llmgateway.routing.Route;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -14,12 +15,33 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "gateway")
 public record GatewayProperties(
-        Map<String, Route> routes, Resilience resilience, Map<String, ModelPrice> prices) {
+        Map<String, Route> routes,
+        Resilience resilience,
+        Map<String, ModelPrice> prices,
+        Budgets budgets) {
 
     public GatewayProperties {
         routes = routes == null ? Map.of() : Map.copyOf(routes);
         resilience = resilience == null ? Resilience.defaults() : resilience;
         prices = prices == null ? Map.of() : Map.copyOf(prices);
+        budgets = budgets == null ? new Budgets(null, Map.of()) : budgets;
+    }
+
+    /** The caller's daily limit, or null when the caller is uncapped. */
+    public BigDecimal dailyBudgetFor(String callerId) {
+        return budgets.perCaller().getOrDefault(callerId, budgets.defaultDaily());
+    }
+
+    /**
+     * @param defaultDaily applies to any caller without its own limit; null
+     *                     leaves callers uncapped, which is the right default
+     *                     for a gateway that would otherwise start rejecting
+     *                     traffic the moment it is deployed
+     */
+    public record Budgets(BigDecimal defaultDaily, Map<String, BigDecimal> perCaller) {
+        public Budgets {
+            perCaller = perCaller == null ? Map.of() : Map.copyOf(perCaller);
+        }
     }
 
     /** Prices are keyed by {@code providerId:upstreamModel}. */

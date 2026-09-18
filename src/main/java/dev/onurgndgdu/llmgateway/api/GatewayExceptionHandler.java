@@ -1,5 +1,6 @@
 package dev.onurgndgdu.llmgateway.api;
 
+import dev.onurgndgdu.llmgateway.cost.BudgetExceededException;
 import dev.onurgndgdu.llmgateway.provider.ProviderException;
 import dev.onurgndgdu.llmgateway.routing.NoRouteException;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,14 @@ class GatewayExceptionHandler {
                         exception.providerId(),
                         exception.kind().retryable());
         return ResponseEntity.status(status).body(error);
+    }
+
+    @ExceptionHandler(BudgetExceededException.class)
+    ResponseEntity<ApiError> handleBudgetExhausted(BudgetExceededException exception) {
+        // 429 rather than 402: the caller is not being asked to pay, it is being
+        // asked to stop until the budget window rolls over.
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiError("BUDGET_EXCEEDED", exception.getMessage(), null, false));
     }
 
     @ExceptionHandler(NoRouteException.class)

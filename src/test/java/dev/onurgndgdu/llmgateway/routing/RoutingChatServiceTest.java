@@ -3,6 +3,10 @@ package dev.onurgndgdu.llmgateway.routing;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.onurgndgdu.llmgateway.config.GatewayProperties;
+import dev.onurgndgdu.llmgateway.cost.BudgetGuard;
+import dev.onurgndgdu.llmgateway.cost.CostCalculator;
+import dev.onurgndgdu.llmgateway.cost.CostLedger;
+import dev.onurgndgdu.llmgateway.cost.TokenEstimator;
 import dev.onurgndgdu.llmgateway.provider.ChatChunk;
 import dev.onurgndgdu.llmgateway.provider.ChatRequest;
 import dev.onurgndgdu.llmgateway.provider.ChatResponse;
@@ -45,7 +49,8 @@ class RoutingChatServiceTest {
         return new GatewayProperties(
                 Map.of("alias", route),
                 new GatewayProperties.Resilience(policy, Map.of()),
-                Map.of());
+                Map.of(),
+                null);
     }
 
     /** One attempt per provider, so retry does not blur the failover assertions. */
@@ -57,8 +62,30 @@ class RoutingChatServiceTest {
     private static RoutingChatService serviceFor(
             GatewayProperties.Policy policy, LlmProvider... providers) {
         GatewayProperties properties = propertiesWith(policy);
+        return serviceFor(properties, new ProviderResilience(properties), providers);
+    }
+
+    /**
+     * Cost accounting is exercised in its own tests; here it is stubbed out so
+     * that these assertions stay about routing and nothing else.
+     */
+    private static RoutingChatService serviceFor(
+            GatewayProperties properties, ProviderResilience resilience, LlmProvider... providers) {
         ModelRouter router = new ModelRouter(properties, List.of(providers));
-        return new RoutingChatService(router, new ProviderResilience(properties));
+        CostLedger ledger = org.mockito.Mockito.mock(CostLedger.class);
+        org.mockito.Mockito.when(ledger.record(org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.empty());
+        BudgetGuard budgets = org.mockito.Mockito.mock(BudgetGuard.class);
+        org.mockito.Mockito.when(budgets.check(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Mono.empty());
+        return new RoutingChatService(
+                router,
+                resilience,
+                budgets,
+                new CostCalculator(properties),
+                ledger,
+                new TokenEstimator());
     }
 
     @Test
@@ -69,7 +96,7 @@ class RoutingChatServiceTest {
         MockProvider secondary =
                 new MockProvider("secondary").defaultScenario(MockScenario.replying("from secondary"));
 
-        ChatResponse response = serviceFor(singleAttempt(), primary, secondary).complete(REQUEST).block();
+        ChatResponse response = serviceFor(singleAttempt(), primary, secondary).complete(REQUEST, "tester").block();
 
         assertThat(response.providerId()).isEqualTo("secondary");
         assertThat(response.content()).isEqualTo("from secondary");
@@ -86,7 +113,7 @@ class RoutingChatServiceTest {
                 new MockProvider("secondary").defaultScenario(MockScenario.replying("never reached"));
 
         Throwable error =
-                catchError(serviceFor(singleAttempt(), primary, secondary).complete(REQUEST));
+                catchError(serviceFor(singleAttempt(), primary, secondary).complete(REQUEST, "tester"));
 
         assertThat(error).isInstanceOf(ProviderException.class);
         assertThat(((ProviderException) error).kind())
@@ -108,7 +135,7 @@ class RoutingChatServiceTest {
         MockProvider secondary =
                 new MockProvider("secondary").defaultScenario(MockScenario.replying("from secondary"));
 
-        ChatResponse response = serviceFor(threeAttempts, primary, secondary).complete(REQUEST).block();
+        ChatResponse response = serviceFor(threeAttempts, primary, secondary).complete(REQUEST, "tester").block();
 
         assertThat(primary.totalCalls()).isEqualTo(3);
         assertThat(response.providerId()).isEqualTo("secondary");
@@ -129,16 +156,15 @@ class RoutingChatServiceTest {
         GatewayProperties properties = propertiesWith(shortWindow);
         ProviderResilience resilience = new ProviderResilience(properties);
         RoutingChatService service =
-                new RoutingChatService(
-                        new ModelRouter(properties, List.of(primary, secondary)), resilience);
+                serviceFor(properties, resilience, primary, secondary);
 
         for (int i = 0; i < 4; i++) {
-            service.complete(REQUEST).block();
+            service.complete(REQUEST, "tester").block();
         }
         assertThat(resilience.stateOf("primary")).isEqualTo(CircuitBreaker.State.OPEN);
 
         int callsBefore = primary.totalCalls();
-        ChatResponse response = service.complete(REQUEST).block();
+        ChatResponse response = service.complete(REQUEST, "tester").block();
 
         // The breaker short-circuits: the provider is not contacted at all, and
         // the caller is still served by the fallback.
@@ -155,7 +181,7 @@ class RoutingChatServiceTest {
                 new MockProvider("secondary").defaultScenario(MockScenario.replying("one two"));
 
         List<ChatChunk> chunks =
-                serviceFor(singleAttempt(), primary, secondary).stream(REQUEST).collectList().block();
+                serviceFor(singleAttempt(), primary, secondary).stream(REQUEST, "tester").collectList().block();
 
         assertThat(chunks).isNotEmpty();
         assertThat(chunks.getLast().last()).isTrue();
@@ -171,7 +197,7 @@ class RoutingChatServiceTest {
 
         Throwable error =
                 catchError(
-                        serviceFor(singleAttempt(), primary, secondary).stream(REQUEST).collectList());
+                        serviceFor(singleAttempt(), primary, secondary).stream(REQUEST, "tester").collectList());
 
         assertThat(error).isInstanceOf(ProviderException.class);
         assertThat(((ProviderException) error).kind())
