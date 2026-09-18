@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: llm-gateway
+
+gateway:
+  # Callers ask for an alias; the vendor model is an operational detail.
+  routes:
+    fast:
+      provider-id: mock
+      upstream-model: mock-fast
+    long-context:
+      provider-id: mock
+      upstream-model: mock-long
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

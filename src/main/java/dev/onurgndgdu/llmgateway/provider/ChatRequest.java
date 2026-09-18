@@ -19,7 +19,14 @@ public record ChatRequest(
         @NotEmpty List<@Valid Message> messages,
         Double temperature,
         @Positive Integer maxTokens,
-        boolean stream) {
+        // Boxed on purpose: the field is optional, and Jackson refuses to map a
+        // missing value onto a primitive. A record component cannot carry a
+        // default, so absence is modelled explicitly and read through streaming().
+        Boolean stream) {
+
+    public boolean streaming() {
+        return Boolean.TRUE.equals(stream);
+    }
 
     public record Message(@NotNull Role role, @NotBlank String content) {}
 

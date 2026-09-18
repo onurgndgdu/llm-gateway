@@ -24,7 +24,7 @@ class MockProviderTest {
                     List.of(new ChatRequest.Message(ChatRequest.Role.USER, "hello")),
                     null,
                     null,
-                    false);
+                    null);
 
     @Test
     void completesWithTheConfiguredReply() {
